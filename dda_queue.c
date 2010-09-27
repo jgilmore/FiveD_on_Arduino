@@ -8,6 +8,7 @@
 #include	"serial.h"
 #include	"sermsg.h"
 #include	"temp.h"
+#include	"delay.h"
 
 uint8_t	mb_head = 0;
 uint8_t	mb_tail = 0;
@@ -26,7 +27,7 @@ uint8_t queue_empty() {
 // It calls a few other functions, though.
 // -------------------------------------------------------
 void queue_step() {
-	disableTimerInterrupt();
+// 	disableTimerInterrupt();
 
 	// do our next step
 	// NOTE: dda_step makes this interrupt interruptible after steps have been sent but before new speed is calculated.
@@ -57,8 +58,9 @@ void queue_step() {
 		cli();
 	#endif
 	// check queue, if empty we don't need to interrupt again until re-enabled in dda_create
-	if (queue_empty() == 0)
-		enableTimerInterrupt();
+	if (queue_empty() != 0)
+		setTimer(0);
+// 		enableTimerInterrupt();
 }
 
 void enqueue(TARGET *t) {
