@@ -83,7 +83,9 @@ void enqueue(TARGET *t) {
 	#endif
 
 	// fire up in case we're not running yet
-	enableTimerInterrupt();
+// 	enableTimerInterrupt();
+	if (queue_empty())
+		setTimer(16);
 }
 
 void enqueue_temp_wait() {
@@ -113,7 +115,9 @@ void enqueue_temp_wait() {
 	#endif
 
 	// fire up in case we're not running yet
-	enableTimerInterrupt();
+// 	enableTimerInterrupt();
+	if (queue_empty())
+		setTimer(16);
 }
 
 void next_move() {
