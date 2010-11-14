@@ -1,0 +1,10 @@
+G28 BUG
+Much worse, as I found out, unlike the standard firmware, this firmware will often stop a move in the middle if the endstops are noisy. Since location is updated at the end of a move even for improperly aborted moves, this results in the position being WAY off. The standard firmware will skip steps (and get off postion) when an endstop gives a momentary false positive, and a skipped step or two probably won't completely ruin a print.  This firmware will (currently, if endstop testing is un-commented) get much, much farther off, and will almost certainly completely ruin the print and possibly crash the head.
+
+It's aborting because it's testing for "did we step" to see if a move is finished, rather than "could we have stepped if the endstops weren't interfering" which the standard fimware does. Obviously, my endstops are giving occasional false positives. I've got some 18/2 shielded that I've decided to replace the endstop wiring with...
+
+I think that the correct implementation is a separate "max speed" loop to go home seeking the endstops, with a flag set when G92 is received which changes G28's behavior to "go to 0,0,0" instead of "seek endstops". With a separate M-code assigned for "seek endstops" so that functionality is still available for those who wish to use it in combination with "set home position." We would have to record the absolute position when "set home" was done, and reset the relative position correctly after seeking is finished.
+
+Implementation details:
+put the "seek endstops" code in dda.c alongside the dda algo.
+put the rest in process_gcode.c,
