@@ -121,4 +121,9 @@ void dda_start(DDA *dda)																						__attribute__ ((hot));
 // DDA takes one step (called from timer interrupt)
 void dda_step(DDA *dda)																							__attribute__ ((hot));
 
+// hit_endstops() move towards the MAX endstops, XY first & then Z.
+// Does NOT update position or feedrate.
+void hit_endstops(void)
+	__attribute__ ((cold));
+
 #endif	/* _DDA_H */

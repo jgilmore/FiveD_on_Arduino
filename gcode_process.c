@@ -15,6 +15,10 @@
 #include	"sersendf.h"
 #include	"debug.h"
 
+uint8_t SetHomeSeen;
+TARGET home;
+
+
 /****************************************************************************
 *                                                                           *
 * Command Received - process it                                             *
@@ -90,61 +94,21 @@ void process_gcode_command() {
 				
 				//	G28 - go home
 			case 28:
-				/*
-				Home XY first
-				*/
-				// hit endstops, no acceleration- we don't care about skipped steps
-				startpoint.F = MAXIMUM_FEEDRATE_X;
-				SpecialMoveXY(-250L * STEPS_PER_MM_X, -250L * STEPS_PER_MM_Y, MAXIMUM_FEEDRATE_X);
-				startpoint.X = startpoint.Y = 0;
-				
-				// move forward a bit
-				SpecialMoveXY(5 * STEPS_PER_MM_X, 5 * STEPS_PER_MM_Y, SEARCH_FEEDRATE_X);
-				
-				// move back in to endstops slowly
-				SpecialMoveXY(-20 * STEPS_PER_MM_X, -20 * STEPS_PER_MM_Y, SEARCH_FEEDRATE_X);
-				
-				// wait for queue to complete
-				for (;queue_empty() == 0;)
-					wd_reset();
-				
-				// this is our home point
-				startpoint.X = startpoint.Y = current_position.X = current_position.Y = 0;
-				
-				/*
-				Home Z
-				*/
-				// hit endstop, no acceleration- we don't care about skipped steps
-				startpoint.F = MAXIMUM_FEEDRATE_Z;
-				SpecialMoveZ(-250L * STEPS_PER_MM_Z, MAXIMUM_FEEDRATE_Z);
-				startpoint.Z = 0;
-				
-				// move forward a bit
-				SpecialMoveZ(5 * STEPS_PER_MM_Z, SEARCH_FEEDRATE_Z);
-				
-				// move back into endstop slowly
-				SpecialMoveZ(-20L * STEPS_PER_MM_Z, SEARCH_FEEDRATE_Z);
-				
-				// wait for queue to complete
-				for (;queue_empty() == 0;)
-					wd_reset();
-				
-				// this is our home point
-				startpoint.Z = current_position.Z = 0;
-				
-				/*
-				Home E
-				*/
-				// extruder only runs one way and we have no "endstop", just set this point as home
-				startpoint.E = current_position.E = 0;
-				
-				/*
-				Home F
-				*/
-				
-				// F has been left at SEARCH_FEEDRATE_Z by the last move, this is a usable "home"
-				// uncomment the following or substitute if you prefer a different default feedrate
-				// startpoint.F = SEARCH_FEEDRATE_Z
+				if( SetHomeSeen ) {
+					enqueue(&home);
+				}
+				else{
+					// wait for queue to complete
+					for (;queue_empty() == 0;)
+						wd_reset();
+
+					hit_endstops();
+					
+					// this is our home point
+					startpoint.X = startpoint.Y = current_position.X = current_position.Y = 0;
+					
+					startpoint.F = SEARCH_FEEDRATE_Z;
+				}
 				
 				break;
 				
@@ -160,6 +124,8 @@ void process_gcode_command() {
 					
 					//	G92 - set home
 				case 92:
+					home = startpoint;
+					SetHomeSeen = 1;
 					startpoint.X = startpoint.Y = startpoint.Z = startpoint.E =
 					current_position.X = current_position.Y = current_position.Z = current_position.E = 0;
 					startpoint.F =

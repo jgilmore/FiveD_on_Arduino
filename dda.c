@@ -12,6 +12,7 @@
 #include	"dda_queue.h"
 #include	"debug.h"
 #include	"sersendf.h"
+#include	"delay.h"
 
 /*
 	X Stepper
@@ -475,14 +476,7 @@ void dda_step(DDA *dda) {
 	// called from interrupt context! keep it as simple as possible
 	uint8_t	did_step = 0;
 
-	if ((current_position.X != dda->endpoint.X) 
-			#ifdef X_MAX_PIN
-			&& ( !dda->x_direction || x_max() ) 
-			#endif
-			#ifdef X_MIN_PIN
-			&& ( dda->x_direction || x_min() ) 
-			#endif
-			) {
+	if (current_position.X != dda->endpoint.X) {
 		dda->x_counter -= dda->x_delta;
 		if (dda->x_counter < 0) {
 			x_step();
@@ -496,14 +490,7 @@ void dda_step(DDA *dda) {
 		}
 	}
 
-	if ((current_position.Y != dda->endpoint.Y) 
-			#ifdef Y_MAX_PIN
-			&& ( !dda->y_direction || y_max() ) 
-			#endif
-			#ifdef Y_MIN_PIN
-			&& ( dda->y_direction || y_min() ) 
-			#endif
-			) {
+	if (current_position.Y != dda->endpoint.Y) {
 		dda->y_counter -= dda->y_delta;
 		if (dda->y_counter < 0) {
 			y_step();
@@ -517,14 +504,7 @@ void dda_step(DDA *dda) {
 		}
 	}
 
-	if ((current_position.Z != dda->endpoint.Z) 
-			#ifdef Z_MAX_PIN
-			&& ( !dda->z_direction || z_max() ) 
-			#endif
-			#ifdef Z_MIN_PIN
-			&& ( dda->z_direction || z_min() ) 
-			#endif
-			) {
+	if (current_position.Z != dda->endpoint.Z) {
 		dda->z_counter -= dda->z_delta;
 		if (dda->z_counter < 0) {
 			z_step();
@@ -630,3 +610,39 @@ void dda_step(DDA *dda) {
 	// we also hope that we don't step before the drivers register the low- limit maximum speed if you think this is a problem.
 	unstep();
 }
+
+
+#if defined X_MIN_PIN && defined Y_MIN_PIN && defined Z_MIN_PIN
+void hit_endstops(void) {
+	/*
+		Hit the X and Y endstops first, then do Z seperately.
+		TODO: use search feedrate to actually find the endstops again after hiting them hard.
+	*/
+	uint16_t xtrack=0,ytrack=0,ztrack=0;
+	x_direction(1);
+	y_direction(1);
+	z_direction(1);
+	
+	while( !x_min() || !y_min()){
+		if(--xtrack<0 && !x_min()){
+			x_step();
+			xtrack = 100000/((long)STEPS_PER_MM_X*MAXIMUM_FEEDRATE_X);
+		}
+		if(--ytrack<0 && !y_min()){
+			y_step();
+			ytrack = 100000/((long)STEPS_PER_MM_Y*MAXIMUM_FEEDRATE_Y);
+		}
+		/* Delay 1/10000 sec (10µSec) */
+		delay(1);
+		unstep();
+	}
+	while( !z_min() ){
+		if(--ztrack<0){
+			z_step();
+			ztrack = 100000/((long)STEPS_PER_MM_Z*MAXIMUM_FEEDRATE_Z);
+		}
+		delay(1);
+		unstep();
+	}
+}
+#endif
