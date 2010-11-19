@@ -190,6 +190,16 @@
 */
 #define ENDSTOP_OK_VALUE	1
 
+/*
+	Number of consecutive readings on all endstops which must match before assuming we're there.
+	The steppers won't step (when homing) when the endstops report "not ok" but we'll keep trying
+	until all of the endstops report "not ok" for DEBOUNCE_ENDSTOPS µseconds. The minimum is 1, which
+	will require them to all be "not ok" for 2 readings 1µs apart. Setting this to zero won't turn off
+	debounce, but will instead turn off homing. (If you *want* to turn off finding the endstops, don't 
+	define any endstop pins, and G28 will always issue do a "G0 X0 Y0 Z0 GMAX" instead.)
+*/
+#define DEBOUNCE_ENDSTOPS    5
+
 /**
  *	list of PWM-able pins and corresponding timers
  *	timer1 is used for step timing so don't use OC1A/OC1B
