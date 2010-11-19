@@ -261,6 +261,7 @@ void gcode_parse_char(uint8_t c) {
 				next_target.seen_Z = 1;
 				break;
 			case 'E':
+			case 'A'://Accept 'A' as well as 'E' for EMC2 compatability
 				next_target.seen_E = 1;
 				break;
 			case 'F':
