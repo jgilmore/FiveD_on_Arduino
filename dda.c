@@ -32,13 +32,6 @@
 	#define	x_step()							_x_step(1);
 	#define	x_direction(dir)			WRITE(X_DIR_PIN, dir)
 #endif
-#if ENDSTOPS_OK_VALUE == 1
-	#define	x_min()							READ(X_MIN_PIN)
-	#define	x_max()							READ(X_MAX_PIN)
-#else
-	#define	x_min()							!READ(X_MIN_PIN)
-	#define	x_max()							!READ(X_MAX_PIN)
-#endif
 
 /*
 	Y Stepper
@@ -60,14 +53,6 @@
 	#define	y_direction(dir)			WRITE(Y_DIR_PIN, dir)
 #endif
 
-#if ENDSTOPS_OK_VALUE == 1
-	#define	y_min()								READ(Y_MIN_PIN)
-	#define	y_max()								READ(Y_MAX_PIN)
-#else
-	#define	y_min()								!READ(Y_MIN_PIN)
-	#define	y_max()								!READ(Y_MAX_PIN)
-#endif
-
 /*
 	Z Stepper
 */
@@ -86,13 +71,6 @@
 	#define	_z_step(st)					WRITE(Z_STEP_PIN, st)
 	#define	z_step()							_z_step(1);
 	#define	z_direction(dir)			WRITE(Z_DIR_PIN, dir)
-#endif
-#if ENDSTOPS_OK_VALUE == 1
-	#define	z_min()								READ(Z_MIN_PIN)
-	#define	z_max()								READ(Z_MAX_PIN)
-#else
-	#define	z_min()								!READ(Z_MIN_PIN)
-	#define	z_max()								!READ(Z_MAX_PIN)
 #endif
 
 /*
@@ -612,35 +590,152 @@ void dda_step(DDA *dda) {
 }
 
 
-#if defined X_MIN_PIN && defined Y_MIN_PIN && defined Z_MIN_PIN
+#if defined X_MIN_PIN || defined Y_MIN_PIN || defined Z_MIN_PIN ||\
+	defined X_MAX_PIN || defined Y_MAX_PIN || defined Z_MAX_PIN
+/*
+	Flexible find endstops code:
+		Account for MAX being defined and MIN undefined on each axis.
+		Finds endstops at maximum speed, and then backs off of the endstops at search speed.
+		Only compiled if an endstop is defined.
+*/
+#ifdef X_MIN_PIN
+	#define	x_limit()    READ(X_MIN_PIN)
+	#define x_home_dir   0
+#elif defined X_MAX_PIN
+	#define	x_limit()    READ(X_MAX_PIN)
+	#define x_home_dir   1
+#else
+	#define NO_ENDSTOPS_X
+	#define x_home_dir   0
+#endif
+#ifdef Y_MIN_PIN
+	#define	y_limit()    READ(Y_MIN_PIN)
+	#define y_home_dir   0
+#elif defined Y_MAY_PIN
+	#define	y_limit()    READ(Y_MAX_PIN)
+	#define y_home_dir   1
+#else
+	#define NO_ENDSTOPS_Y
+	#define y_home_dir   0
+#endif
+#ifdef Z_MIN_PIN
+	#define	z_limit()    READ(Z_MIN_PIN)
+	#define z_home_dir   0
+#elif defined Z_MAZ_PIN
+	#define	z_limit()    READ(Z_MAX_PIN)
+	#define z_home_dir   1
+#else
+	#define NO_ENDSTOPS_Z
+	#define z_home_dir   0
+#endif
+#if ENDSTOPS_OK_VALUE != 1
+	#define x_limit()    !x_limit()
+	#define y_limit()    !y_limit()
+	#define z_limit()    !z_limit()
+#endif
+
+/* Sorry about this rather obscure section. 
+   Basically, declare #define "functions" to correctly test if all endstops are triggered one way or all the other,
+   even in cases where there's only one endstop we're testing. complicated by needing to keep the boolean
+   operators with one expression on each side. yuk.
+*/
+#ifdef NO_ENDSTOPS_X
+	#define x_limit()    1
+#endif
+#ifdef NO_ENDSTOPS_Y
+	#define y_limit()    1
+#endif
+#ifdef NO_ENDSTOPS_Z
+	#define z_limit()    1
+#endif
+#define all_on() ( x_limit() && y_limit() && z_limit() )
+#ifdef NO_ENDSTOPS_X
+	#define x_limit_off()    1
+#else
+	#define x_limit_off()    !x_limit()
+#endif
+#ifdef NO_ENDSTOPS_Y
+	#define y_limit_off()    1
+#else
+	#define y_limit_off()    !y_limit()
+#endif
+#ifdef NO_ENDSTOPS_Z
+	#define z_limit_off()    1
+#else
+	#define z_limit_off()    !z_limit()
+#endif
+#define all_off() ( x_limit_off() && y_limit_off() && z_limit_off() )
+
 void hit_endstops(void) {
-	/*
-		Hit the X and Y endstops first, then do Z seperately.
-		TODO: use search feedrate to actually find the endstops again after hiting them hard.
-	*/
+
+	// TODO: This code generates harmless warnings (unused variable) when compiled without endstops on an axis.
 	uint16_t xtrack=0,ytrack=0,ztrack=0;
-	x_direction(1);
-	y_direction(1);
-	z_direction(1);
+	uint8_t	debounce=0;
+
+	/* if we're not homing an axis (because it has no endstops) this is
+	   harmless, but redundant. Maybe work the extra #ifdefs to remove if space is tight. */
+	x_direction(x_home_dir);
+	y_direction(y_home_dir);
+	z_direction(z_home_dir);
 	
-	while( !x_min() || !y_min()){
-		if(--xtrack<0 && !x_min()){
+	while( debounce < DEBOUNCE_ENDSTOPS ){
+		if( all_on())
+			debounce++;
+		else
+			debounce=0;
+		#ifndef NO_ENDSTOPS_X
+		if( --xtrack < 0 && !x_limit() ){
 			x_step();
 			xtrack = 100000/((long)STEPS_PER_MM_X*MAXIMUM_FEEDRATE_X);
 		}
-		if(--ytrack<0 && !y_min()){
+		#endif
+		#ifndef NO_ENDSTOPS_Y
+		if( --ytrack < 0 && !y_limit() ){
 			y_step();
 			ytrack = 100000/((long)STEPS_PER_MM_Y*MAXIMUM_FEEDRATE_Y);
 		}
+		#endif
+		#ifndef NO_ENDSTOPS_Z
+		if( --ztrack < 0 && !z_limit() ){
+			z_step();
+			ztrack = 100000/((long)STEPS_PER_MM_Z*MAXIMUM_FEEDRATE_Z);
+		}
+		#endif
 		/* Delay 1/10000 sec (10µSec) */
 		delay(1);
 		unstep();
 	}
-	while( !z_min() ){
-		if(--ztrack<0){
-			z_step();
-			ztrack = 100000/((long)STEPS_PER_MM_Z*MAXIMUM_FEEDRATE_Z);
+	// Endstops are all triggered, back off slowly till they all untrigger.
+	x_direction(!x_home_dir);
+	y_direction(!y_home_dir);
+	z_direction(!z_home_dir);
+
+	debounce = 0;
+	
+	while( debounce < DEBOUNCE_ENDSTOPS ){
+		if( all_off() )
+			debounce++;
+		else
+			debounce=0;
+		#ifndef NO_ENDSTOPS_X
+		if( --xtrack < 0 && x_limit() ){
+			x_step();
+			xtrack = 100000/((long)STEPS_PER_MM_X*SEARCH_FEEDRATE_X);
 		}
+		#endif
+		#ifndef NO_ENDSTOPS_Y
+		if( --ytrack < 0 && y_limit() ){
+			y_step();
+			ytrack = 100000/((long)STEPS_PER_MM_Y*SEARCH_FEEDRATE_Y);
+		}
+		#endif
+		#ifndef NO_ENDSTOPS_Z
+		if( --ztrack < 0 && z_limit() ){
+			z_step();
+			ztrack = 100000/((long)STEPS_PER_MM_Z*SEARCH_FEEDRATE_Z);
+		}
+		#endif
+		/* Delay 1/10000 sec (10µSec) */
 		delay(1);
 		unstep();
 	}

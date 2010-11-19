@@ -15,8 +15,13 @@
 #include	"sersendf.h"
 #include	"debug.h"
 
+#if defined X_MIN_PIN || defined Y_MIN_PIN || defined Z_MIN_PIN ||\
+	defined X_MAX_PIN || defined Y_MAX_PIN || defined Z_MAX_PIN
 uint8_t SetHomeSeen;
 TARGET home;
+#else
+	#define SetHomeSeen 1
+#endif
 
 
 /****************************************************************************
@@ -48,8 +53,33 @@ void process_gcode_command() {
 	
 	if (next_target.seen_G) {
 		switch (next_target.G) {
+				//	G30 - go home via point
+			case 30:
+				enqueue(&next_target.target);
+				// no break here, G30 is move and then go home
+				//	G28 - go home
+			case 28:
+				if( SetHomeSeen ) {
+					next_target.target.X = next_target.target.Y = next_target.target.Z = 0;
+					/* no break here */
+				}
+				else{
+					// wait for queue to complete
+					for (;queue_empty() == 0;)
+						wd_reset();
+
+					// This function doesn't update position or feedrate or anything, just moves.
+					hit_endstops();
+					
+					// resting just off the endstops is the zero point, so set current_postion.
+					startpoint.X = startpoint.Y = current_position.X = current_position.Y = 0;
+					startpoint.F = SEARCH_FEEDRATE_Z;
+					break;
+				}
+				/* no break here */
 			// 	G0 - rapid, unsynchronised motion
 			// since it would be a major hassle to force the dda to not synchronise, just provide a fast feedrate and hope it's close enough to what host expects
+				
 			case 0:
 				backup_f = next_target.target.F;
 				next_target.target.F = MAXIMUM_FEEDRATE_X * 2;
@@ -87,30 +117,7 @@ void process_gcode_command() {
 				next_target.option_inches = 0;
 				break;
 				
-				//	G30 - go home via point
-			case 30:
-				enqueue(&next_target.target);
-				// no break here, G30 is move and then go home
 				
-				//	G28 - go home
-			case 28:
-				if( SetHomeSeen ) {
-					enqueue(&home);
-				}
-				else{
-					// wait for queue to complete
-					for (;queue_empty() == 0;)
-						wd_reset();
-
-					hit_endstops();
-					
-					// this is our home point
-					startpoint.X = startpoint.Y = current_position.X = current_position.Y = 0;
-					
-					startpoint.F = SEARCH_FEEDRATE_Z;
-				}
-				
-				break;
 				
 				//	G90 - absolute positioning
 				case 90:
@@ -124,8 +131,10 @@ void process_gcode_command() {
 					
 					//	G92 - set home
 				case 92:
+					#if !defined SetHomeSeen
 					home = startpoint;
 					SetHomeSeen = 1;
+					#endif
 					startpoint.X = startpoint.Y = startpoint.Z = startpoint.E =
 					current_position.X = current_position.Y = current_position.Z = current_position.E = 0;
 					startpoint.F =
