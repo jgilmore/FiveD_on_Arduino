@@ -72,7 +72,9 @@ void process_gcode_command() {
 					hit_endstops();
 					
 					// resting just off the endstops is the zero point, so set current_postion.
-					startpoint.X = startpoint.Y = current_position.X = current_position.Y = 0;
+					startpoint.X = current_position.X = 0;
+					startpoint.Y = current_position.Y = 0;
+					startpoint.Z = current_position.Z = 0;
 					startpoint.F = SEARCH_FEEDRATE_Z;
 					break;
 				}
@@ -155,26 +157,12 @@ void process_gcode_command() {
 				if (temp_achieved() == 0) {
 					enqueue(NULL);
 				}
-				do {
-					// backup feedrate, move E very quickly then restore feedrate
-					backup_f = startpoint.F;
-					startpoint.F = MAXIMUM_FEEDRATE_E;
-					SpecialMoveE(E_STARTSTOP_STEPS, MAXIMUM_FEEDRATE_E);
-					startpoint.F = backup_f;
-				} while (0);
 				break;
 				
 				// M102- extruder reverse
 				
 				// M103- extruder off
 			case 103:
-				do {
-					// backup feedrate, move E very quickly then restore feedrate
-					backup_f = startpoint.F;
-					startpoint.F = MAXIMUM_FEEDRATE_E;
-					SpecialMoveE(-E_STARTSTOP_STEPS, MAXIMUM_FEEDRATE_E);
-					startpoint.F = backup_f;
-				} while (0);
 				break;
 				
 				// M104- set temperature
@@ -313,6 +301,32 @@ void process_gcode_command() {
 				serial_writestr_P(PSTR("Echo on\n"));
 				break;
 				
+				// DEBUG: return endstop status. Test endstops by reading 200 times, return numbers.
+				// To really test, issue a move command, and then do this.
+			case 249:
+				{
+				uint8_t i,xon=0,xoff=0,yon=0,yoff=0,zon=0,zoff=0;
+				for( i = 0; i<200 ; i++){
+					#ifdef X_MIN_PIN
+					if(READ(X_MIN_PIN)) xon++;else xoff++;
+					#elif defined X_MAX_PIN
+					if(READ(X_MAX_PIN)) xon++;else xoff++;
+					#endif
+					#ifdef Y_MIN_PIN
+					if(READ(Y_MIN_PIN)) yon++;else yoff++;
+					#elif defined Y_MAX_PIN
+					if(READ(Y_MAX_PIN)) yon++;else yoff++;
+					#endif
+					#ifdef Z_MIN_PIN
+					if(READ(Z_MIN_PIN)) zon++;else zoff++;
+					#elif defined Z_MAX_PIN
+					if(READ(Z_MAX_PIN)) zon++;else zoff++;
+					#endif
+					delay(10);
+				}
+				sersendf_P(PSTR("X:%d/%d Y:%d/%d Z:%d/%d"),xon,xoff,yon,yoff,zon,zoff);
+				}
+				break;	
 				// DEBUG: return current position
 			case 250:
 				serial_writechar('{');

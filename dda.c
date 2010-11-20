@@ -598,40 +598,46 @@ void dda_step(DDA *dda) {
 		Finds endstops at maximum speed, and then backs off of the endstops at search speed.
 		Only compiled if an endstop is defined.
 */
+#if ENDSTOPS_OK_VALUE != 0
+	#define EOK
+#else
+	#define EOK	!
+#endif
 #ifdef X_MIN_PIN
-	#define	x_limit()    READ(X_MIN_PIN)
-	#define x_home_dir   0
+	#define	x_limit()     (EOK READ(X_MIN_PIN))
+	#define x_home_dir    0
 #elif defined X_MAX_PIN
-	#define	x_limit()    READ(X_MAX_PIN)
-	#define x_home_dir   1
+	#define	x_limit()     (EOK READ(X_MAX_PIN))
+	#define x_home_dir    1
 #else
 	#define NO_ENDSTOPS_X
-	#define x_home_dir   0
+	#define x_home_dir    0
+	#define x_limit()     1
+	#define x_limit_off() 1
 #endif
 #ifdef Y_MIN_PIN
-	#define	y_limit()    READ(Y_MIN_PIN)
-	#define y_home_dir   0
-#elif defined Y_MAY_PIN
-	#define	y_limit()    READ(Y_MAX_PIN)
-	#define y_home_dir   1
+	#define	y_limit()     (EOK READ(Y_MIN_PIN))
+	#define y_home_dir    0
+#elif defined Y_MAX_PIN
+	#define	y_limit()     (EOK READ(Y_MAX_PIN))
+	#define y_home_dir    1
 #else
 	#define NO_ENDSTOPS_Y
-	#define y_home_dir   0
+	#define y_home_dir    0
+	#define y_limit()     1
+	#define y_limit_off() 1
 #endif
 #ifdef Z_MIN_PIN
-	#define	z_limit()    READ(Z_MIN_PIN)
-	#define z_home_dir   0
-#elif defined Z_MAZ_PIN
-	#define	z_limit()    READ(Z_MAX_PIN)
-	#define z_home_dir   1
+	#define	z_limit()     (EOK READ(Z_MIN_PIN))
+	#define z_home_dir    0
+#elif defined Z_MAX_PIN
+	#define	z_limit()     (EOK READ(Z_MAX_PIN))
+	#define z_home_dir    1
 #else
 	#define NO_ENDSTOPS_Z
-	#define z_home_dir   0
-#endif
-#if ENDSTOPS_OK_VALUE != 1
-	#define x_limit()    !x_limit()
-	#define y_limit()    !y_limit()
-	#define z_limit()    !z_limit()
+	#define z_home_dir    0
+	#define z_limit()     1
+	#define z_limit_off() 1
 #endif
 
 /* Sorry about this rather obscure section. 
@@ -639,29 +645,14 @@ void dda_step(DDA *dda) {
    even in cases where there's only one endstop we're testing. complicated by needing to keep the boolean
    operators with one expression on each side. yuk.
 */
-#ifdef NO_ENDSTOPS_X
-	#define x_limit()    1
-#endif
-#ifdef NO_ENDSTOPS_Y
-	#define y_limit()    1
-#endif
-#ifdef NO_ENDSTOPS_Z
-	#define z_limit()    1
-#endif
 #define all_on() ( x_limit() && y_limit() && z_limit() )
-#ifdef NO_ENDSTOPS_X
-	#define x_limit_off()    1
-#else
+#ifndef NO_ENDSTOPS_X
 	#define x_limit_off()    !x_limit()
 #endif
-#ifdef NO_ENDSTOPS_Y
-	#define y_limit_off()    1
-#else
+#ifndef NO_ENDSTOPS_Y
 	#define y_limit_off()    !y_limit()
 #endif
-#ifdef NO_ENDSTOPS_Z
-	#define z_limit_off()    1
-#else
+#ifndef NO_ENDSTOPS_Z
 	#define z_limit_off()    !z_limit()
 #endif
 #define all_off() ( x_limit_off() && y_limit_off() && z_limit_off() )
@@ -669,8 +660,8 @@ void dda_step(DDA *dda) {
 void hit_endstops(void) {
 
 	// TODO: This code generates harmless warnings (unused variable) when compiled without endstops on an axis.
-	uint16_t xtrack=0,ytrack=0,ztrack=0;
-	uint8_t	debounce=0;
+	int16_t xtrack=0,ytrack=0,ztrack=0;
+	uint16_t debounce=0;
 
 	/* if we're not homing an axis (because it has no endstops) this is
 	   harmless, but redundant. Maybe work the extra #ifdefs to remove if space is tight. */
@@ -686,24 +677,25 @@ void hit_endstops(void) {
 		#ifndef NO_ENDSTOPS_X
 		if( --xtrack < 0 && !x_limit() ){
 			x_step();
-			xtrack = 100000/((long)STEPS_PER_MM_X*MAXIMUM_FEEDRATE_X);
+			xtrack = 600000/(STEPS_PER_MM_X*MAXIMUM_FEEDRATE_X);
 		}
 		#endif
 		#ifndef NO_ENDSTOPS_Y
 		if( --ytrack < 0 && !y_limit() ){
 			y_step();
-			ytrack = 100000/((long)STEPS_PER_MM_Y*MAXIMUM_FEEDRATE_Y);
+			ytrack = 600000/(STEPS_PER_MM_Y*MAXIMUM_FEEDRATE_Y);
 		}
 		#endif
 		#ifndef NO_ENDSTOPS_Z
 		if( --ztrack < 0 && !z_limit() ){
 			z_step();
-			ztrack = 100000/((long)STEPS_PER_MM_Z*MAXIMUM_FEEDRATE_Z);
+			ztrack = 600000/(STEPS_PER_MM_Z*MAXIMUM_FEEDRATE_Z);
 		}
 		#endif
-		/* Delay 1/10000 sec (10µSec) */
-		delay(1);
+		/* Delay 1/10000 sec (100µSec) */
+		delay(50);
 		unstep();
+		delay(50);
 	}
 	// Endstops are all triggered, back off slowly till they all untrigger.
 	x_direction(!x_home_dir);
@@ -720,24 +712,25 @@ void hit_endstops(void) {
 		#ifndef NO_ENDSTOPS_X
 		if( --xtrack < 0 && x_limit() ){
 			x_step();
-			xtrack = 100000/((long)STEPS_PER_MM_X*SEARCH_FEEDRATE_X);
+			xtrack = 600000/(STEPS_PER_MM_X*SEARCH_FEEDRATE_X);
 		}
 		#endif
 		#ifndef NO_ENDSTOPS_Y
 		if( --ytrack < 0 && y_limit() ){
 			y_step();
-			ytrack = 100000/((long)STEPS_PER_MM_Y*SEARCH_FEEDRATE_Y);
+			ytrack = 600000/(STEPS_PER_MM_Y*SEARCH_FEEDRATE_Y);
 		}
 		#endif
 		#ifndef NO_ENDSTOPS_Z
 		if( --ztrack < 0 && z_limit() ){
 			z_step();
-			ztrack = 100000/((long)STEPS_PER_MM_Z*SEARCH_FEEDRATE_Z);
+			ztrack = 600000/(STEPS_PER_MM_Z*SEARCH_FEEDRATE_Z);
 		}
 		#endif
 		/* Delay 1/10000 sec (10µSec) */
-		delay(1);
+		delay(50);
 		unstep();
+		delay(50);
 	}
 }
 #endif
