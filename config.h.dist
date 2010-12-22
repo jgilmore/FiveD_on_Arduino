@@ -188,7 +188,7 @@
 	This is the value that the endstop pins read 
 	when it's "ok" to move in that direction.
 */
-#define ENDSTOP_OK_VALUE	1
+#define ENDSTOPS_OK_VALUE	1
 
 /*
 	Number of consecutive readings on all endstops which must match before assuming we're there.
