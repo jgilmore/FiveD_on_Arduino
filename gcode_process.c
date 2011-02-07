@@ -275,14 +275,16 @@ void process_gcode_command() {
 				// M7/M106- fan on
 			case 7:
 			case 106:
-				if (NUM_HEATERS > 1)
-					heater_set(1, 255);
+				#ifdef HEATER_FAN
+					heater_set(HEATER_FAN, 255);
+				#endif
 				break;
 				// M107- fan off
 			case 9:
 			case 107:
-				if (NUM_HEATERS > 1)
-					heater_set(1, 0);
+				#ifdef HEATER_FAN
+					heater_set(HEATER_FAN, 0);
+				#endif
 				break;
 				
 				// M109- set temp and wait
@@ -357,9 +359,11 @@ void process_gcode_command() {
 				break;
 
 			case 140: //Set heated bed temperature
-				temp_set(BED_HEATER, next_target.S);
-				if (next_target.S)
-					power_on();
+				#ifdef	HEATER_BED
+					temp_set(HEATER_BED, next_target.S);
+					if (next_target.S)
+						power_on();
+				#endif
 				break;
 				
 				// M190- power on
@@ -379,14 +383,14 @@ void process_gcode_command() {
 				break;
 				
 			#ifdef	DEBUG
-				// M140- echo off
-			case 140:
+				// M240- echo off
+			case 240:
 				debug_flags &= ~DEBUG_ECHO;
 				serial_writestr_P(PSTR("Echo off"));
 				// newline is sent from gcode_parse after we return
 				break;
-				// M141- echo on
-			case 141:
+				// M241- echo on
+			case 241:
 				debug_flags |= DEBUG_ECHO;
 				serial_writestr_P(PSTR("Echo on"));
 				// newline is sent from gcode_parse after we return
